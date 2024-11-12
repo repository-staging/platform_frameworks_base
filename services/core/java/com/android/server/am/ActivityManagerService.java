@@ -9089,8 +9089,7 @@ public class ActivityManagerService extends IActivityManager.Stub
                     com.android.internal.R.bool.config_customUserSwitchUi);
             final int maxRunningUsers = res.getInteger(
                     com.android.internal.R.integer.config_multiuserMaxRunningUsers);
-            final boolean delayUserDataLocking = res.getBoolean(
-                    com.android.internal.R.bool.config_multiuserDelayUserDataLocking);
+            final boolean delayUserDataLocking = false;
             final int backgroundUserScheduledStopTimeSecs = res.getInteger(
                     com.android.internal.R.integer.config_backgroundUserScheduledStopTimeSecs);
             mUserController.setInitialConfig(userSwitchUiEnabled, maxRunningUsers,
