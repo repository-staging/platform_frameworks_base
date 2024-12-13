@@ -4372,6 +4372,8 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
         if (dexUseManager != null) {
             dexUseManager.systemReady();
         }
+
+        PackageManagerServiceHooks.systemReady(this);
     }
 
     //TODO: b/111402650
@@ -4826,6 +4828,10 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
             mHandler.post(new Runnable() {
                 public void run() {
                     mHandler.removeCallbacks(this);
+
+                    PackageManagerServiceHooks.onClearApplicationUserData(
+                            PackageManagerService.this, packageName, userId);
+
                     final boolean succeeded;
                     try (PackageFreezer freezer = freezePackage(packageName, UserHandle.USER_ALL,
                             "clearApplicationUserData",
