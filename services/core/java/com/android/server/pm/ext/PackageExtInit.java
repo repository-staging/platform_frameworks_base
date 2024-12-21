@@ -87,6 +87,7 @@ public class PackageExtInit implements ParsingPackageUtils.PackageExtInitIface {
                     "7ce83c1b71f3d572fed04c8d40c5cb10ff75e6d87d9df6fbd53f0468c2905053");
             case PIXEL_HEALTH_NAME -> validate(PIXEL_HEALTH, 2224L,
                     "295499d8d0e93b7ed64f90e8cddffc12e3be23d8806f54e05d1abf415c37f5ba");
+            case "app.attestation.auditor" -> validateSystemPkg(-100);
 
             default -> PackageId.UNKNOWN;
         };

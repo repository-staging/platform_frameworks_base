@@ -1,8 +1,13 @@
 package com.android.server.pm.ext;
 
+import android.annotation.NonNull;
+import android.annotation.Nullable;
 import android.ext.PackageId;
 
+import com.android.internal.pm.pkg.component.ParsedUsesPermissionImpl;
 import com.android.internal.pm.pkg.parsing.PackageParsingHooks;
+
+import java.util.List;
 
 public class PackageHooksRegistry {
 
@@ -18,6 +23,13 @@ public class PackageHooksRegistry {
             case PackageId.G_EUICC_LPA_NAME -> new EuiccGoogleHooks.ParsingHooks();
             case PackageId.PIXEL_CAMERA_SERVICES_NAME -> new PixelCameraServicesHooks.ParsingHooks();
             case PackageId.PIXEL_HEALTH_NAME -> new PixelHealthHooks.ParsingHooks();
+            case "app.attestation.auditor" -> new PackageParsingHooks() {
+                @NonNull
+                @Override
+                public List<ParsedUsesPermissionImpl> addUsesPermissions() {
+                    return createUsesPerms("android.permission.READ_ADDITIONAL_SECURITY_STATE");
+                }
+            };
             default -> PackageParsingHooks.DEFAULT;
         };
     }
