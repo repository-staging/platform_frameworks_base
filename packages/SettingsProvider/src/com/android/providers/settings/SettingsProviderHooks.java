@@ -33,6 +33,65 @@ class SettingsProviderHooks {
         state.insertSettingLocked(key, value, null /* tag */, false /* makeDefault */, SettingsState.SYSTEM_PACKAGE_NAME);
     }
 
+    static boolean isImmutableSetting(SettingsState settingsState, Context ctx, int type, String name, int userId) {
+        if (name == null) {
+            return false;
+        }
+
+        return switch (type) {
+            case SettingsProvider.SETTINGS_TYPE_GLOBAL -> switch (name) {
+                case Settings.Global.ADD_USERS_WHEN_LOCKED,
+                     Settings.Global.ENABLE_EPHEMERAL_FEATURE
+                    -> true;
+                default -> false;
+            };
+
+            default -> false;
+        };
+    }
+
+    static SettingsState.Setting getImmutableSetting(SettingsState settingsState, Context ctx, int type, String name, int userId) {
+        if (name == null) {
+            return null;
+        }
+
+        return switch (type) {
+            case SettingsProvider.SETTINGS_TYPE_GLOBAL -> switch (name) {
+                case Settings.Global.ADD_USERS_WHEN_LOCKED,
+                     Settings.Global.ENABLE_EPHEMERAL_FEATURE
+                        -> settingsState.new Setting(
+                                null, null, false, null, null) {
+                    @Override
+                    public String getValue() {
+                        return "0";
+                    }
+
+                    @Override
+                    public boolean update(
+                            String value, boolean setDefault, String packageName,
+                            String tag, boolean forceNonSystemPackage,
+                            boolean overrideableByRestore) {
+                        return false;
+                    }
+
+                    @Override
+                    public boolean reset() {
+                        return false;
+                    }
+
+                    @Override
+                    public boolean isTransient() {
+                        return true;
+                    }
+                };
+
+                default -> null;
+            };
+
+            default -> null;
+        };
+    }
+
     static final int OPR_UNKNOWN = 0;
     static final int OPR_READ_SETTING = 1;
     static final int OPR_MUTATE_SETTING_INSERT = 2;
