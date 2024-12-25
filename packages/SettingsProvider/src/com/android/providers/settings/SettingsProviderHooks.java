@@ -148,7 +148,8 @@ class SettingsProviderHooks {
 
             case SettingsProvider.SETTINGS_TYPE_SECURE -> {
                 switch (name) {
-                    case Settings.Secure.AUTO_GRANT_OTHER_SENSORS_PERMISSION
+                    case Settings.Secure.AUTO_GRANT_OTHER_SENSORS_PERMISSION,
+                         Settings.Secure.CROSS_PROFILE_CLIPBOARD_IMPORT_ACCESS
                             -> {
                     }
                     case Settings.Secure.SCREENSHOT_TIMESTAMP_EXIF,
