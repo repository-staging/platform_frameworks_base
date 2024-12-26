@@ -1143,6 +1143,20 @@ public class SettingsProvider extends ContentProvider {
                         Binder.restoreCallingIdentity(identity);
                     }
                 }
+                if (changedRestrictions.contains(UserManager.DISALLOW_CROSS_PROFILE_COPY_PASTE)) {
+                    final long identity = Binder.clearCallingIdentity();
+                    try {
+                        for (int profileId : mUserManager.getProfileIdsWithDisabled(userId)) {
+                            synchronized (mLock) {
+                                final int key = makeKey(SETTINGS_TYPE_SECURE, profileId);
+                                final String name = Settings.Secure.CROSS_PROFILE_CLIPBOARD_IMPORT_ACCESS;
+                                mSettingsRegistry.notifyForSettingsChange(key, name);
+                            }
+                        }
+                    } finally {
+                        Binder.restoreCallingIdentity(identity);
+                    }
+                }
             }
         };
         mUserManager.addUserRestrictionsListener(listener);
