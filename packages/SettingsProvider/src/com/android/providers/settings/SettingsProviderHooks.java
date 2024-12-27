@@ -173,9 +173,9 @@ class SettingsProviderHooks {
             }
         }
 
-        if (UserHandle.getAppId(callingAppInfo.uid) == Process.SYSTEM_UID
-                && callingAppInfo.isSystemApp()) {
+        if (UserHandle.getAppId(callingAppInfo.uid) == Process.SYSTEM_UID) {
             if (SettingsState.SYSTEM_PACKAGE_NAME.equals(callingPkgName)
+                    || UserHandle.getUserId(callingAppInfo.uid) == UserHandle.USER_SYSTEM
                     || ksp.settings.equals(callingPkgName)) {
                 return;
             } else {
