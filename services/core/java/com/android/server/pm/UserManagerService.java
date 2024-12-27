@@ -8388,9 +8388,11 @@ public class UserManagerService extends IUserManager.Stub {
             return false;
         }
 
-        userProperties.resetAllowStoppingUserWithDelayedLocking();
-        scheduleWriteUser(userId);
-        return true;
+        boolean res = userProperties.resetAllowStoppingUserWithDelayedLocking();
+        if (res) {
+            scheduleWriteUser(userId);
+        }
+        return res;
     }
 
 }
