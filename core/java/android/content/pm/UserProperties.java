@@ -911,15 +911,6 @@ public final class UserProperties implements Parcelable {
         this.mAllowStoppingUserWithDelayedLocking = val;
         setPresent(INDEX_ALLOW_STOPPING_USER_WITH_DELAYED_LOCKING);
     }
-    /** @hide */
-    public boolean resetAllowStoppingUserWithDelayedLocking() {
-        if (!isPresent(INDEX_ALLOW_STOPPING_USER_WITH_DELAYED_LOCKING)) {
-            return false;
-        }
-
-        mPropertiesPresent &= ~(1L << INDEX_ALLOW_STOPPING_USER_WITH_DELAYED_LOCKING);
-        return true;
-    }
     private boolean mAllowStoppingUserWithDelayedLocking;
 
     /**
