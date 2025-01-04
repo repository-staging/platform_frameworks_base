@@ -1934,6 +1934,11 @@ public class UserManagerService extends IUserManager.Stub {
 
     private void setQuietModeEnabled(@UserIdInt int userId, boolean enableQuietMode,
             IntentSender target, @Nullable String callingPackage) {
+        setQuietModeEnabled(userId, enableQuietMode, target, callingPackage, true);
+    }
+
+    private void setQuietModeEnabled(@UserIdInt int userId, boolean enableQuietMode,
+            IntentSender target, @Nullable String callingPackage, boolean delayStorageLocking) {
         final UserInfo profile, parent;
         final UserData profileUserData;
         synchronized (mUsersLock) {
@@ -1957,7 +1962,7 @@ public class UserManagerService extends IUserManager.Stub {
 
         try {
             if (enableQuietMode) {
-                stopUserForQuietMode(userId);
+                stopUserForQuietMode(userId, delayStorageLocking);
                 LocalServices.getService(ActivityManagerInternal.class)
                         .killForegroundAppsForUser(userId);
             } else {
@@ -1986,8 +1991,9 @@ public class UserManagerService extends IUserManager.Stub {
         }
     }
 
-    private void stopUserForQuietMode(int userId) throws RemoteException {
+    private void stopUserForQuietMode(int userId, boolean delayStorageLocking) throws RemoteException {
         if (android.os.Flags.allowPrivateProfile()
+                && delayStorageLocking
                 && android.multiuser.Flags.enableBiometricsToUnlockPrivateSpace()
                 && android.multiuser.Flags.enablePrivateSpaceFeatures()) {
             // Allow delayed locking since some profile types want to be able to unlock again via
