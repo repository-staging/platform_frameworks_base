@@ -1782,6 +1782,8 @@ public class UserManagerService extends IUserManager.Stub {
                 (flags & UserManager.QUIET_MODE_DISABLE_DONT_ASK_CREDENTIAL) != 0;
         final boolean onlyIfCredentialNotRequired =
                 (flags & UserManager.QUIET_MODE_DISABLE_ONLY_IF_CREDENTIAL_NOT_REQUIRED) != 0;
+        final boolean delayStorageLocking =
+                (flags & (UserManager.QUIET_MODE_ENABLE_STOP_WITHOUT_DELAYED_LOCKING)) == 0;
         if (dontAskCredential && onlyIfCredentialNotRequired) {
             throw new IllegalArgumentException("invalid flags: " + flags);
         }
@@ -1815,7 +1817,7 @@ public class UserManagerService extends IUserManager.Stub {
                 }
             }
             if (enableQuietMode) {
-                setQuietModeEnabled(userId, true /* enableQuietMode */, target, callingPackage);
+                setQuietModeEnabled(userId, true /* enableQuietMode */, target, callingPackage, delayStorageLocking);
                 return true;
             }
             if (android.os.Flags.allowPrivateProfile()
