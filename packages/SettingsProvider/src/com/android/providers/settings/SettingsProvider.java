@@ -345,9 +345,14 @@ public class SettingsProvider extends ContentProvider {
     private static final Set<String> sReadableSecureSettings = new ArraySet<>();
     private static final ArrayMap<String, Integer> sReadableSecureSettingsWithMaxTargetSdk =
             new ArrayMap<>();
+    private static final ArrayMap<String, Set<String>> sSecureSettingsWithOverrideReadAccess =
+            new ArrayMap<>();
+    private static final ArrayMap<String, Set<String>> sSecureSettingsWithOverrideWriteAccess =
+            new ArrayMap<>();
     static {
         Settings.Secure.getPublicSettings(sAllSecureSettings, sReadableSecureSettings,
-                sReadableSecureSettingsWithMaxTargetSdk);
+                sReadableSecureSettingsWithMaxTargetSdk,
+                sSecureSettingsWithOverrideReadAccess, sSecureSettingsWithOverrideWriteAccess);
     }
 
     private static final Set<String> sAllSystemSettings = new ArraySet<>();
@@ -363,9 +368,14 @@ public class SettingsProvider extends ContentProvider {
     private static final Set<String> sReadableGlobalSettings = new ArraySet<>();
     private static final ArrayMap<String, Integer> sReadableGlobalSettingsWithMaxTargetSdk =
             new ArrayMap<>();
+    private static final ArrayMap<String, Set<String>> sGlobalSettingsWithOverrideReadAccess =
+            new ArrayMap<>();
+    private static final ArrayMap<String, Set<String>> sGlobalSettingsWithOverrideWriteAccess =
+            new ArrayMap<>();
     static {
         Settings.Global.getPublicSettings(sAllGlobalSettings, sReadableGlobalSettings,
-                sReadableGlobalSettingsWithMaxTargetSdk);
+                sReadableGlobalSettingsWithMaxTargetSdk,
+                sGlobalSettingsWithOverrideReadAccess, sGlobalSettingsWithOverrideWriteAccess);
     }
 
     private final Object mLock = new Object();
@@ -1544,6 +1554,20 @@ public class SettingsProvider extends ContentProvider {
         // Make sure the caller can change the settings - treated as secure.
         enforceHasAtLeastOnePermission(Manifest.permission.WRITE_SECURE_SETTINGS);
 
+        final ArrayMap<String, Set<String>> fieldsWithOverrideWriteAccess =
+                sGlobalSettingsWithOverrideWriteAccess;
+        if (fieldsWithOverrideWriteAccess != null) {
+            Set<String> packagesThatCanAccess = fieldsWithOverrideWriteAccess.get(name);
+            if (packagesThatCanAccess != null) {
+                if (UserHandle.getAppId(Binder.getCallingUid()) >= Process.FIRST_APPLICATION_UID) {
+                    ApplicationInfo ai = getCallingApplicationInfoOrThrow();
+                    if (!ai.isSystemApp() || !packagesThatCanAccess.contains(ai.packageName)) {
+                        throw new SecurityException("trying to access unexposed setting for system apps");
+                    }
+                }
+            }
+        }
+
         // Resolve the userId on whose behalf the call is made.
         final int callingUserId = resolveCallingUserIdEnforcingPermissions(requestingUserId);
 
@@ -1828,6 +1852,20 @@ public class SettingsProvider extends ContentProvider {
             int mode, boolean overrideableByRestore) {
         // Make sure the caller can change the settings.
         enforceHasAtLeastOnePermission(Manifest.permission.WRITE_SECURE_SETTINGS);
+
+        final ArrayMap<String, Set<String>> fieldsWithOverrideWriteAccess =
+                sSecureSettingsWithOverrideWriteAccess;
+        if (fieldsWithOverrideWriteAccess != null) {
+            Set<String> packagesThatCanAccess = fieldsWithOverrideWriteAccess.get(name);
+            if (packagesThatCanAccess != null) {
+                if (UserHandle.getAppId(Binder.getCallingUid()) >= Process.FIRST_APPLICATION_UID) {
+                    ApplicationInfo ai = getCallingApplicationInfoOrThrow();
+                    if (!ai.isSystemApp() || !packagesThatCanAccess.contains(ai.packageName)) {
+                        throw new SecurityException("trying to access unexposed setting for system apps");
+                    }
+                }
+            }
+        }
 
         // Resolve the userId on whose behalf the call is made.
         final int callingUserId = resolveCallingUserIdEnforcingPermissions(requestingUserId);
@@ -2260,6 +2298,29 @@ public class SettingsProvider extends ContentProvider {
             return;
         }
         ApplicationInfo ai = getCallingApplicationInfoOrThrow();
+
+        final ArrayMap<String, Set<String>> fieldsWithOverrideReadAccess;
+        switch (settingsType) {
+            case SETTINGS_TYPE_GLOBAL -> {
+                fieldsWithOverrideReadAccess = sGlobalSettingsWithOverrideReadAccess;
+            }
+            case SETTINGS_TYPE_SECURE -> {
+                fieldsWithOverrideReadAccess = sSecureSettingsWithOverrideReadAccess;
+            }
+            default -> {
+                fieldsWithOverrideReadAccess = null;
+            }
+        }
+
+        if (fieldsWithOverrideReadAccess != null) {
+            Set<String> packagesThatCanAccess = fieldsWithOverrideReadAccess.get(settingName);
+            if (packagesThatCanAccess != null) {
+                if (!ai.isSystemApp() || !packagesThatCanAccess.contains(ai.packageName)) {
+                    throw new SecurityException("trying to access unexposed setting for system apps");
+                }
+            }
+        }
+
         if (ai.isSystemApp() || ai.isSignedWithPlatformKey()) {
             return;
         }

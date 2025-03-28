@@ -3487,6 +3487,8 @@ public final class Settings {
         private final ArraySet<String> mReadableFields;
         private final ArraySet<String> mAllFields;
         private final ArrayMap<String, Integer> mReadableFieldsWithMaxTargetSdk;
+        private final ArrayMap<String, Set<String>> mReadableFieldsOverrideFlags;
+        private final ArrayMap<String, Set<String>> mWritableFieldsOverrideFlags;
 
         // Mapping from the name of a setting (or the prefix of a namespace) to a generation tracker
         @GuardedBy("this")
@@ -3524,8 +3526,12 @@ public final class Settings {
             mReadableFields = new ArraySet<>();
             mAllFields = new ArraySet<>();
             mReadableFieldsWithMaxTargetSdk = new ArrayMap<>();
+            mReadableFieldsOverrideFlags = new ArrayMap<>();
+            mWritableFieldsOverrideFlags = new ArrayMap<>();
             getPublicSettingsForClass(callerClass, mAllFields, mReadableFields,
-                    mReadableFieldsWithMaxTargetSdk);
+                    mReadableFieldsWithMaxTargetSdk,
+                    mReadableFieldsOverrideFlags,
+                    mWritableFieldsOverrideFlags);
         }
 
         // Returns last path component of the relevant Uri.
@@ -3706,6 +3712,19 @@ public final class Settings {
                                             + maxTargetSdk
                             );
                         }
+                    }
+                }
+            } else if (mReadableFieldsOverrideFlags.containsKey(name)) {
+                final Application application = ActivityThread.currentApplication();
+                if (application != null && application.getApplicationInfo() != null) {
+                    final ApplicationInfo applicationInfo = application.getApplicationInfo();
+                    if (UserHandle.getAppId(applicationInfo.uid) >= Process.FIRST_APPLICATION_UID
+                            && (!applicationInfo.isSystemApp()
+                            || !mReadableFieldsOverrideFlags.get(name)
+                            .contains(applicationInfo.packageName))) {
+                        throw new SecurityException(
+                                "Settings key: <" + name + "> is only readable to select system apps"
+                        );
                     }
                 }
             }
@@ -4083,9 +4102,26 @@ public final class Settings {
         int maxTargetSdk() default 0;
     }
 
+    @Target({ ElementType.FIELD })
+    @Retention(RetentionPolicy.RUNTIME)
+    private @interface AccessOverride {
+        String[] systemPackagesWithReadAccess() default {};
+        String[] systemPackagesWithWriteAccess() default {};
+    }
+
+
     private static <T extends NameValueTable> void getPublicSettingsForClass(
             Class<T> callerClass, Set<String> allKeys, Set<String> readableKeys,
             ArrayMap<String, Integer> keysWithMaxTargetSdk) {
+        getPublicSettingsForClass(callerClass, allKeys, readableKeys, keysWithMaxTargetSdk,
+                null, null);
+    }
+
+    private static <T extends NameValueTable> void getPublicSettingsForClass(
+            Class<T> callerClass, Set<String> allKeys, Set<String> readableKeys,
+            ArrayMap<String, Integer> keysWithMaxTargetSdk,
+            @Nullable ArrayMap<String, Set<String>> keysWithOverrideReadAccess,
+            @Nullable ArrayMap<String, Set<String>> keysWithOverrideWriteAccess) {
         final Field[] allFields = callerClass.getDeclaredFields();
         try {
             for (int i = 0; i < allFields.length; i++) {
@@ -4106,6 +4142,35 @@ public final class Settings {
                     readableKeys.add(key);
                     if (maxTargetSdk != 0) {
                         keysWithMaxTargetSdk.put(key, maxTargetSdk);
+                    }
+                }
+
+                if (keysWithOverrideReadAccess == null || keysWithOverrideWriteAccess == null) {
+                    continue;
+                }
+
+                final AccessOverride accessOverrideAnnotation =
+                        field.getAnnotation(AccessOverride.class);
+                if (accessOverrideAnnotation != null) {
+                    final String key = (String) value;
+                    String[] sysPkgsWithReadAccess =
+                            accessOverrideAnnotation.systemPackagesWithReadAccess();
+                    if (sysPkgsWithReadAccess != null) {
+                        Set<String> sysPkgsWithReadAccessSet = new ArraySet<>();
+                        for (String pkg: sysPkgsWithReadAccess) {
+                            sysPkgsWithReadAccessSet.add(pkg);
+                        }
+                        keysWithOverrideReadAccess.put(key, sysPkgsWithReadAccessSet);
+                    }
+
+                    String[] sysPkgsWithWriteAccess =
+                            accessOverrideAnnotation.systemPackagesWithWriteAccess();
+                    if (sysPkgsWithWriteAccess != null) {
+                        Set<String> sysPkgsWithWriteAccessSet = new ArraySet<>();
+                        for (String pkg: sysPkgsWithWriteAccess) {
+                            sysPkgsWithWriteAccessSet.add(pkg);
+                        }
+                        keysWithOverrideWriteAccess.put(key, sysPkgsWithWriteAccessSet);
                     }
                 }
             }
@@ -7179,9 +7244,11 @@ public final class Settings {
 
         /** @hide */
         public static void getPublicSettings(Set<String> allKeys, Set<String> readableKeys,
-                ArrayMap<String, Integer> readableKeysWithMaxTargetSdk) {
+                ArrayMap<String, Integer> readableKeysWithMaxTargetSdk,
+                ArrayMap<String, Set<String>> keysWithOverrideReadAccess,
+                ArrayMap<String, Set<String>> keysWithOverrideWriteAccess) {
             getPublicSettingsForClass(Secure.class, allKeys, readableKeys,
-                    readableKeysWithMaxTargetSdk);
+                    readableKeysWithMaxTargetSdk, keysWithOverrideReadAccess, keysWithOverrideWriteAccess);
         }
 
         /**
@@ -18443,9 +18510,11 @@ public final class Settings {
 
         /** @hide */
         public static void getPublicSettings(Set<String> allKeys, Set<String> readableKeys,
-                ArrayMap<String, Integer> readableKeysWithMaxTargetSdk) {
+                ArrayMap<String, Integer> readableKeysWithMaxTargetSdk,
+                ArrayMap<String, Set<String>> keysWithOverrideReadAccess,
+                ArrayMap<String, Set<String>> keysWithOverrideWriteAccess) {
             getPublicSettingsForClass(Global.class, allKeys, readableKeys,
-                    readableKeysWithMaxTargetSdk);
+                    readableKeysWithMaxTargetSdk, keysWithOverrideReadAccess, keysWithOverrideWriteAccess);
             // Add Global.Wearable keys on watches.
             if (ActivityThread.currentApplication().getApplicationContext().getPackageManager()
                     .hasSystemFeature(PackageManager.FEATURE_WATCH)) {
