@@ -670,7 +670,7 @@ public class UserManagerService extends IUserManager.Stub {
                     + "preference is set to %d", privateSpaceAutoLockPreference);
             return;
         }
-        int privateProfileUserId = getPrivateProfileUserId();
+        int privateProfileUserId = getPrivateProfileUserId(getMainUserIdUnchecked());
         if (privateProfileUserId != UserHandle.USER_NULL) {
             if (isQuietModeEnabled(privateProfileUserId)) {
                 Slogf.d(LOG_TAG, "Not scheduling auto-lock alarm for %d, "
@@ -752,7 +752,7 @@ public class UserManagerService extends IUserManager.Stub {
     @RequiresPermission(Manifest.permission.SUBSCRIBE_TO_KEYGUARD_LOCKED_STATE)
     void setOrUpdateAutoLockPreferenceForPrivateProfile(
             @Settings.Secure.PrivateSpaceAutoLockOption int autoLockPreference) {
-        int privateProfileUserId = getPrivateProfileUserId();
+        int privateProfileUserId = getPrivateProfileUserId(getMainUserIdUnchecked());
         if (privateProfileUserId == UserHandle.USER_NULL) {
             Slog.e(LOG_TAG, "Auto-lock preference updated but private space user not found");
             return;
@@ -815,7 +815,7 @@ public class UserManagerService extends IUserManager.Stub {
 
     @VisibleForTesting
     void autoLockPrivateSpace() {
-        int privateProfileUserId = getPrivateProfileUserId();
+        int privateProfileUserId = getPrivateProfileUserId(getMainUserIdUnchecked());
         if (privateProfileUserId != UserHandle.USER_NULL) {
             Slog.i(LOG_TAG, "Auto-locking private space with user-id "
                     + privateProfileUserId);
@@ -1062,7 +1062,7 @@ public class UserManagerService extends IUserManager.Stub {
                         && user.info.id != UserHandle.USER_SYSTEM
                         && !user.info.isMain() && user.info.isFull()) {
                     final int privateProfileUserId =
-                            mUms.getPrivateProfileUserId();
+                            mUms.getPrivateProfileUserId(mUms.getMainUserIdUnchecked());
                     if (privateProfileUserId != UserHandle.USER_NULL) {
                         Slog.i(LOG_TAG, "Auto-locking private space with user-id "
                                 + privateProfileUserId + " reason: " + reason);
@@ -1393,13 +1393,15 @@ public class UserManagerService extends IUserManager.Stub {
         return UserHandle.USER_NULL;
     }
 
-    private @CanBeNULL @UserIdInt int getPrivateProfileUserId() {
+    // Needed to properly check for private profiles of a userId,
+    // otherwise, it may fetch the wrong private profile of lesser userId of non-main user.
+    // Current auto-lock only supports private profiles of main user.
+    private @CanBeNULL @UserIdInt int getPrivateProfileUserId(int userId) {
         synchronized (mUsersLock) {
-            for (int userId : getUserIds()) {
-                UserInfo userInfo = getUserInfoLU(userId);
-                if (userInfo != null && userInfo.isPrivateProfile()) {
-                    return userInfo.id;
-                }
+            IntArray privateProfiles = getProfileIdsLU(userId, USER_TYPE_PROFILE_PRIVATE,
+                    /* enabledOnly */ true, /* excludeHidden */ false);
+            if (privateProfiles.size() == 1) {
+                return privateProfiles.get(0);
             }
         }
         return UserHandle.USER_NULL;
