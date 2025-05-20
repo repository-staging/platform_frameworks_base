@@ -1515,7 +1515,7 @@ class UserController implements Handler.Callback {
         // Once we reach here, we are in a delayed locking scenario.
         // Now, no user will be locked, unless the device's policy dictates we should based on the
         // maximum of such users allowed for the device.
-        if (mDelayUserDataLocking) {
+        if (true) {
             // arg should be object, not index
             mLastActiveUsersForDelayedLocking.remove((Integer) userId);
             mLastActiveUsersForDelayedLocking.add(0, userId);
