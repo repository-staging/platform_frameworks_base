@@ -111,6 +111,17 @@ public class NotificationUsageStats {
     }
 
     /**
+     * Query when a notification wants to alert based on existing stats.
+     */
+    public synchronized boolean isAlertRateLimitedQueryOnly(String packageName) {
+        AggregatedStats stats = mStats.get(packageName);
+        if (stats == null) {
+            return false;
+        }
+        return stats.isAlertRateLimited();
+    }
+
+    /**
      * Called when a notification is tentatively enqueued by an app, before rate checking.
      */
     public synchronized void registerEnqueuedByApp(String packageName) {
