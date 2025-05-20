@@ -1592,6 +1592,26 @@ class UserController implements Handler.Callback {
                 }
                 userIds.add(startedUserId);
             }
+            final int delayedLockingUserSize = mLastActiveUsersForDelayedLocking.size();
+            // The user is the parent of the profile group. Stop its profiles too.
+            for (int i = delayedLockingUserSize - 1; i >= 0; --i) {
+                Integer delayedLockingUserId = mLastActiveUsersForDelayedLocking.get(i);
+                if (delayedLockingUserId == null) {
+                    continue;
+                }
+                // Skip unrelated users (profileGroupId mismatch)
+                int startedUserGroupId = mUserProfileGroupIds.get(delayedLockingUserId,
+                        UserInfo.NO_PROFILE_GROUP_ID);
+                boolean sameGroup = (userGroupId != UserInfo.NO_PROFILE_GROUP_ID)
+                        && (userGroupId == startedUserGroupId);
+                // userId has already been added
+                boolean sameUserId = delayedLockingUserId == userId;
+                if (!sameGroup || sameUserId) {
+                    continue;
+                }
+                userIds.add(delayedLockingUserId);
+                mLastActiveUsersForDelayedLocking.remove(i);
+            }
         }
         return userIds.toArray();
     }
