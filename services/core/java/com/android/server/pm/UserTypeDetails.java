@@ -166,6 +166,8 @@ public final class UserTypeDetails {
      */
     private final @NonNull UserProperties mDefaultUserProperties;
 
+    private final @Nullable List<String> mRestrictionsToFallbackFromParent;
+
     private UserTypeDetails(@NonNull String name, boolean enabled, int maxAllowed,
             @UserInfoFlag int baseType, @UserInfoFlag int defaultUserInfoPropertyFlags,
             @Nullable int[] labels, int maxAllowedPerParent, boolean profileParentRequired,
@@ -178,7 +180,8 @@ public final class UserTypeDetails {
             @Nullable Bundle defaultSecureSettings,
             @Nullable List<DefaultCrossProfileIntentFilter> defaultCrossProfileIntentFilters,
             @StringRes int accessibilityString,
-            @NonNull UserProperties defaultUserProperties) {
+            @NonNull UserProperties defaultUserProperties,
+            @Nullable List<String> userRestrictionKeysToCopyFromParent) {
         this.mName = name;
         this.mEnabled = enabled;
         this.mMaxAllowed = maxAllowed;
@@ -200,6 +203,7 @@ public final class UserTypeDetails {
         this.mDarkThemeBadgeColors = darkThemeBadgeColors;
         this.mAccessibilityString = accessibilityString;
         this.mDefaultUserProperties = defaultUserProperties;
+        this.mRestrictionsToFallbackFromParent = userRestrictionKeysToCopyFromParent;
     }
 
     /**
@@ -379,6 +383,12 @@ public final class UserTypeDetails {
                 : Collections.emptyList();
     }
 
+    @NonNull List<String> getRestrictionsToFallbackFromParent() {
+        return mRestrictionsToFallbackFromParent != null
+                ? new ArrayList<>(mRestrictionsToFallbackFromParent)
+                : Collections.emptyList();
+    }
+
     /** Value that indicates that there is no limit to the number of users allowed. */
     public static int getLegacyUnlimitedNumberOfUsersValue() {
         if (android.multiuser.Flags.decoupleMaxUsersFromProfiles()) {
@@ -446,6 +456,8 @@ public final class UserTypeDetails {
         // Default UserProperties cannot be null but for efficiency we don't initialize it now.
         // If it isn't set explicitly, {@link UserProperties.Builder#build()} will be used.
         private @Nullable UserProperties mDefaultUserProperties = null;
+
+        private @Nullable List<String> mRestrictionsToFallbackFromParent;
 
         public Builder setName(String name) {
             mName = name;
@@ -560,6 +572,12 @@ public final class UserTypeDetails {
             return this;
         }
 
+        public Builder setRestrictionsToFallbackFromParent(
+                @Nullable List<String> userRestrictionKeysToCopyFromParent) {
+            mRestrictionsToFallbackFromParent = userRestrictionKeysToCopyFromParent;
+            return this;
+        }
+
         public @NonNull UserProperties getDefaultUserProperties() {
             if (mDefaultUserProperties == null) {
                 mDefaultUserProperties = new UserProperties.Builder().build();
@@ -601,6 +619,10 @@ public final class UserTypeDetails {
                                 + "defaultCrossProfileIntentFilters", mName);
                 Preconditions.checkArgument(!mProfileParentRequired,
                         "UserTypeDetails %s requires a parent but isn't a profile", mName);
+                Preconditions.checkArgument(mRestrictionsToFallbackFromParent == null
+                                || mRestrictionsToFallbackFromParent.isEmpty(),
+                        "UserTypeDetails %s has a non empty "
+                                + "userRestrictionKeysToCopyFromParent", mName);
             }
             return new UserTypeDetails(
                     mName,
@@ -623,7 +645,8 @@ public final class UserTypeDetails {
                     mDefaultSecureSettings,
                     mDefaultCrossProfileIntentFilters,
                     mAccessibilityString,
-                    getDefaultUserProperties());
+                    getDefaultUserProperties(),
+                    mRestrictionsToFallbackFromParent);
         }
 
         private boolean hasBadge() {
