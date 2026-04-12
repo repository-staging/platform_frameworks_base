@@ -3883,6 +3883,30 @@ public class UserManagerService extends IUserManager.Stub {
 
     @GuardedBy("mRestrictionsLock")
     private Bundle computeEffectiveUserRestrictionsLR(@UserIdInt int userId) {
+        List<String> fallbackKeys = getFallbackUserRestrictionsFromParent(userId);
+        if (fallbackKeys.isEmpty()) {
+            return computeEffectiveUserRestrictionsForSingleUserLR(userId);
+        }
+
+        final int parentUserId = getProfileParentIdUnchecked(userId);
+        if (parentUserId == userId) {
+            return computeEffectiveUserRestrictionsForSingleUserLR(userId);
+        }
+
+        Bundle parentEffective = getEffectiveUserRestrictions(parentUserId);
+        Bundle fallbackFromParent = new Bundle();
+        for (String fallbackKey: fallbackKeys) {
+            if (parentEffective.getBoolean(fallbackKey, false)) {
+                fallbackFromParent.putBoolean(fallbackKey, true);
+            }
+        }
+
+        UserRestrictionsUtils.merge(fallbackFromParent, computeEffectiveUserRestrictionsForSingleUserLR(userId));
+        return fallbackFromParent;
+    }
+
+    @GuardedBy("mRestrictionsLock")
+    private Bundle computeEffectiveUserRestrictionsForSingleUserLR(@UserIdInt int userId) {
         final Bundle baseRestrictions = mBaseUserRestrictions.getRestrictionsNonNull(userId);
 
         final Bundle global = mDevicePolicyUserRestrictions.getRestrictionsNonNull(
@@ -4003,7 +4027,26 @@ public class UserManagerService extends IUserManager.Stub {
     public List<EnforcingUser> getUserRestrictionSources(
             String restrictionKey, @UserIdInt int userId) {
         checkQueryUsersPermission("call getUserRestrictionSources.");
+        List<EnforcingUser> sources = getUserRestrictionSourcesUnchecked(restrictionKey, userId);
+        if (!sources.isEmpty()) {
+            return sources;
+        }
 
+        List<String> fallbackKeys = getFallbackUserRestrictionsFromParent(userId);
+        if (fallbackKeys.isEmpty()) {
+            return sources;
+        }
+
+        final int parentUserId = getProfileParentIdUnchecked(userId);
+        if (parentUserId == userId) {
+            return sources;
+        }
+
+        return getUserRestrictionSourcesUnchecked(restrictionKey, parentUserId);
+    }
+
+    private List<EnforcingUser> getUserRestrictionSourcesUnchecked(
+            String restrictionKey, @UserIdInt int userId) {
         // Shortcut for the most common case
         if (!hasUserRestriction(restrictionKey, userId)) {
             return Collections.emptyList();
@@ -4120,6 +4163,22 @@ public class UserManagerService extends IUserManager.Stub {
         propagateUserRestrictionsLR(userId, effective, prevAppliedRestrictions);
 
         mAppliedUserRestrictions.updateRestrictions(userId, new Bundle(effective));
+        maybeUpdateProfilesRestrictionsInternalLR(userId);
+    }
+
+    @GuardedBy("mRestrictionsLock")
+    private void maybeUpdateProfilesRestrictionsInternalLR(int userId) {
+        UserInfo userInfo = getUserInfoNoChecks(userId);
+        if (userInfo != null && userInfo.isFull()) {
+            List<UserInfo> profiles = getProfiles(userId, true);
+            for (UserInfo profile: profiles) {
+                if (!profile.isProfile()) {
+                    continue;
+                }
+
+                updateUserRestrictionsInternalLR(null, profile.id);
+            }
+        }
     }
 
     @GuardedBy("mRestrictionsLock")
@@ -9433,5 +9492,22 @@ public class UserManagerService extends IUserManager.Stub {
      */
     public UserJourneyLogger getUserJourneyLogger() {
         return mUserJourneyLogger;
+    }
+
+    private List<String> getFallbackUserRestrictionsFromParent(int userId) {
+        UserTypeDetails userTypeDetails = getUserTypeDetailsNoChecks(userId);
+        if (userTypeDetails == null) {
+            return Collections.emptyList();
+        }
+
+        if (!userTypeDetails.isProfile()) {
+            return Collections.emptyList();
+        }
+
+        if (!userTypeDetails.isProfileParentRequired()) {
+            return Collections.emptyList();
+        }
+
+        return userTypeDetails.getRestrictionsToFallbackFromParent();
     }
 }
