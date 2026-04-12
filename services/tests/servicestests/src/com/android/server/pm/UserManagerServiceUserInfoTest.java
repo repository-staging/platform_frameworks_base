@@ -29,7 +29,9 @@ import static android.os.UserManager.USER_TYPE_FULL_GUEST;
 import static android.os.UserManager.USER_TYPE_FULL_RESTRICTED;
 import static android.os.UserManager.USER_TYPE_FULL_SECONDARY;
 import static android.os.UserManager.USER_TYPE_FULL_SYSTEM;
+import static android.os.UserManager.USER_TYPE_PROFILE_CLONE;
 import static android.os.UserManager.USER_TYPE_PROFILE_MANAGED;
+import static android.os.UserManager.USER_TYPE_PROFILE_PRIVATE;
 import static android.os.UserManager.USER_TYPE_SYSTEM_HEADLESS;
 
 import static com.google.common.truth.Truth.assertWithMessage;
@@ -56,9 +58,13 @@ import com.android.server.pm.UserManagerService.UserData;
 
 import com.google.common.truth.Expect;
 
+import junitparams.JUnitParamsRunner;
+import junitparams.Parameters;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlSerializer;
 
@@ -66,6 +72,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -74,6 +81,7 @@ import java.util.List;
  */
 @Presubmit
 @MediumTest
+@RunWith(JUnitParamsRunner.class)
 @SuppressWarnings("deprecation")
 public final class UserManagerServiceUserInfoTest {
 
@@ -435,5 +443,184 @@ public final class UserManagerServiceUserInfoTest {
                 .getUserRestrictions(userId).getBoolean(UserManager.DISALLOW_CAMERA)).isTrue();
         expect.withMessage("getUserRestrictions(DISALLOW_WALLPAPER)").that(mUserManagerService
                 .getUserRestrictions(userId).getBoolean(UserManager.DISALLOW_WALLPAPER)).isTrue();
+    }
+
+    @Test
+    @Parameters(method = "getRestrictionFallbackParams")
+    public void testUserRestrictionsSourcesFallback_ForFullUserToItsProfile(RestrictionsFallbackParams params) {
+        String fullUserType = params.fullUserType;
+        String profileUserType = params.profileUserType;
+        int fullUserId = 302;
+        UserTypeDetails fullUserTypeDetails = UserTypeFactory.getUserTypes().get(fullUserType);
+        UserInfo fullUser = createUser(fullUserId,
+                fullUserTypeDetails.getDefaultUserInfoFlags(),
+                fullUserType);
+        fullUser.profileGroupId = fullUserId;
+        mUserManagerService.putUserInfo(fullUser);
+
+        int profileUserId = 303;
+        UserTypeDetails profileUserTypeDetails = UserTypeFactory.getUserTypes().get(profileUserType);
+        UserInfo profileUser = createUser(profileUserId,
+                profileUserTypeDetails.getDefaultUserInfoFlags(),
+                profileUserType);
+        profileUser.profileGroupId = fullUserId;
+        mUserManagerService.putUserInfo(profileUser);
+
+        for (String fallbackKey: profileUserTypeDetails.getRestrictionsToFallbackFromParent()) {
+            mUserManagerService.setUserRestriction(fallbackKey, true, profileUserId);
+            expect.withMessage("getUserRestrictionSources(" + fallbackKey + ")")
+                    .that((mUserManagerService.getUserRestrictionSource(fallbackKey, fullUserId) & UserManager.RESTRICTION_SOURCE_SYSTEM) != 0)
+                    .isFalse();
+            expect.withMessage("getUserRestrictionSources(" + fallbackKey + ")")
+                    .that((mUserManagerService.getUserRestrictionSource(fallbackKey, profileUserId) & UserManager.RESTRICTION_SOURCE_SYSTEM) != 0)
+                    .isTrue();
+
+            mUserManagerService.setUserRestriction(fallbackKey, true, fullUserId);
+            expect.withMessage("getUserRestrictionSources(" + fallbackKey + ")")
+                    .that((mUserManagerService.getUserRestrictionSource(fallbackKey, fullUserId) & UserManager.RESTRICTION_SOURCE_SYSTEM) != 0)
+                    .isTrue();
+            expect.withMessage("getUserRestrictionSources(" + fallbackKey + ")")
+                    .that((mUserManagerService.getUserRestrictionSource(fallbackKey, profileUserId) & UserManager.RESTRICTION_SOURCE_SYSTEM) != 0)
+                    .isTrue();
+
+            mUserManagerService.setUserRestriction(fallbackKey, false, profileUserId);
+            expect.withMessage("getUserRestrictionSources(" + fallbackKey + ")")
+                    .that((mUserManagerService.getUserRestrictionSource(fallbackKey, fullUserId) & UserManager.RESTRICTION_SOURCE_SYSTEM) != 0)
+                    .isTrue();
+            expect.withMessage("getUserRestrictionSources(" + fallbackKey + ")")
+                    .that((mUserManagerService.getUserRestrictionSource(fallbackKey, profileUserId) & UserManager.RESTRICTION_SOURCE_SYSTEM) != 0)
+                    .isTrue();
+
+            mUserManagerService.setUserRestriction(fallbackKey, false, fullUserId);
+            expect.withMessage("getUserRestrictionSources(" + fallbackKey + ")")
+                    .that((mUserManagerService.getUserRestrictionSource(fallbackKey, fullUserId) & UserManager.RESTRICTION_SOURCE_SYSTEM) != 0)
+                    .isFalse();
+            expect.withMessage("getUserRestrictionSources(" + fallbackKey + ")")
+                    .that((mUserManagerService.getUserRestrictionSource(fallbackKey, profileUserId) & UserManager.RESTRICTION_SOURCE_SYSTEM) != 0)
+                    .isFalse();
+        }
+    }
+
+    @Test
+    @Parameters(method = "getRestrictionFallbackParams")
+    public void testUserRestrictionsFallback_ForFullUserToItsProfile(RestrictionsFallbackParams params) {
+        String fullUserType = params.fullUserType;
+        String profileUserType = params.profileUserType;
+        int fullUserId = 300;
+        UserTypeDetails fullUserTypeDetails = UserTypeFactory.getUserTypes().get(fullUserType);
+        UserInfo fullUser = createUser(fullUserId,
+                fullUserTypeDetails.getDefaultUserInfoFlags(),
+                fullUserType);
+        fullUser.profileGroupId = fullUserId;
+        mUserManagerService.putUserInfo(fullUser);
+
+        int profileUserId = 301;
+        UserTypeDetails profileUserTypeDetails = UserTypeFactory.getUserTypes().get(profileUserType);
+        UserInfo profileUser = createUser(profileUserId,
+                profileUserTypeDetails.getDefaultUserInfoFlags(),
+                profileUserType);
+        profileUser.profileGroupId = fullUserId;
+        mUserManagerService.putUserInfo(profileUser);
+
+        for (String fallbackKey: profileUserTypeDetails.getRestrictionsToFallbackFromParent()) {
+            expect.withMessage("getUserRestrictions(" + fallbackKey + ")").that(mUserManagerService
+                    .getUserRestrictions(fullUserId).getBoolean(fallbackKey)).isFalse();
+            expect.withMessage("getUserRestrictions(" + fallbackKey + ")").that(mUserManagerService
+                    .getUserRestrictions(profileUserId).getBoolean(fallbackKey)).isFalse();
+
+            mUserManagerService.setUserRestriction(fallbackKey, true, profileUserId);
+            expect.withMessage("getUserRestrictions(" + fallbackKey + ")").that(mUserManagerService
+                    .getUserRestrictions(fullUserId).getBoolean(fallbackKey)).isFalse();
+            expect.withMessage("getUserRestrictions(" + fallbackKey + ")").that(mUserManagerService
+                    .getUserRestrictions(profileUserId).getBoolean(fallbackKey)).isTrue();
+
+            mUserManagerService.setUserRestriction(fallbackKey, true, fullUserId);
+            expect.withMessage("getUserRestrictions(" + fallbackKey + ")").that(mUserManagerService
+                    .getUserRestrictions(fullUserId).getBoolean(fallbackKey)).isTrue();
+            expect.withMessage("getUserRestrictions(" + fallbackKey + ")").that(mUserManagerService
+                    .getUserRestrictions(profileUserId).getBoolean(fallbackKey)).isTrue();
+
+            mUserManagerService.setUserRestriction(fallbackKey, false, profileUserId);
+            expect.withMessage("getUserRestrictions(" + fallbackKey + ")").that(mUserManagerService
+                    .getUserRestrictions(fullUserId).getBoolean(fallbackKey)).isTrue();
+            expect.withMessage("getUserRestrictions(" + fallbackKey + ")").that(mUserManagerService
+                    .getUserRestrictions(profileUserId).getBoolean(fallbackKey)).isTrue();
+
+            mUserManagerService.setUserRestriction(fallbackKey, false, fullUserId);
+            expect.withMessage("getUserRestrictions(" + fallbackKey + ")").that(mUserManagerService
+                    .getUserRestrictions(fullUserId).getBoolean(fallbackKey)).isFalse();
+            expect.withMessage("getUserRestrictions(" + fallbackKey + ")").that(mUserManagerService
+                    .getUserRestrictions(profileUserId).getBoolean(fallbackKey)).isFalse();
+        }
+
+        List<String> restrictionsThatHasNoFallback = new ArrayList<>(UserRestrictionsUtils.USER_RESTRICTIONS);
+        restrictionsThatHasNoFallback.removeAll(profileUserTypeDetails.getRestrictionsToFallbackFromParent());
+        java.security.SecureRandom random = new java.security.SecureRandom();
+        int randomIndex = random.nextInt(0, restrictionsThatHasNoFallback.size() - 1);
+        String randomRestrictionKey = restrictionsThatHasNoFallback.get(randomIndex);
+
+        expect.withMessage("getUserRestrictions(" + randomRestrictionKey + ")").that(mUserManagerService
+                .getUserRestrictions(fullUserId).getBoolean(randomRestrictionKey)).isFalse();
+        expect.withMessage("getUserRestrictions(" + randomRestrictionKey + ")").that(mUserManagerService
+                .getUserRestrictions(profileUserId).getBoolean(randomRestrictionKey)).isFalse();
+
+        mUserManagerService.setUserRestriction(randomRestrictionKey, true, profileUserId);
+        expect.withMessage("getUserRestrictions(" + randomRestrictionKey + ")").that(mUserManagerService
+                .getUserRestrictions(fullUserId).getBoolean(randomRestrictionKey)).isFalse();
+        expect.withMessage("getUserRestrictions(" + randomRestrictionKey + ")").that(mUserManagerService
+                .getUserRestrictions(profileUserId).getBoolean(randomRestrictionKey)).isTrue();
+
+        mUserManagerService.setUserRestriction(randomRestrictionKey, true, fullUserId);
+        expect.withMessage("getUserRestrictions(" + randomRestrictionKey + ")").that(mUserManagerService
+                .getUserRestrictions(fullUserId).getBoolean(randomRestrictionKey)).isTrue();
+        expect.withMessage("getUserRestrictions(" + randomRestrictionKey + ")").that(mUserManagerService
+                .getUserRestrictions(profileUserId).getBoolean(randomRestrictionKey)).isTrue();
+
+        mUserManagerService.setUserRestriction(randomRestrictionKey, false, profileUserId);
+        expect.withMessage("getUserRestrictions(" + randomRestrictionKey + ")").that(mUserManagerService
+                .getUserRestrictions(fullUserId).getBoolean(randomRestrictionKey)).isTrue();
+        expect.withMessage("getUserRestrictions(" + randomRestrictionKey + ")").that(mUserManagerService
+                .getUserRestrictions(profileUserId).getBoolean(randomRestrictionKey)).isFalse();
+
+        mUserManagerService.setUserRestriction(randomRestrictionKey, false, fullUserId);
+        expect.withMessage("getUserRestrictions(" + randomRestrictionKey + ")").that(mUserManagerService
+                .getUserRestrictions(fullUserId).getBoolean(randomRestrictionKey)).isFalse();
+        expect.withMessage("getUserRestrictions(" + randomRestrictionKey + ")").that(mUserManagerService
+                .getUserRestrictions(profileUserId).getBoolean(randomRestrictionKey)).isFalse();
+    }
+
+    private static final class RestrictionsFallbackParams {
+        private final String fullUserType;
+        private final String profileUserType;
+
+        private RestrictionsFallbackParams(String fullUserType, String profileUserType) {
+            this.fullUserType = fullUserType;
+            this.profileUserType = profileUserType;
+        }
+    }
+
+    private RestrictionsFallbackParams[] getRestrictionFallbackParams() {
+        String[] fullUserTypes = new String[] {
+                USER_TYPE_FULL_SYSTEM,
+                USER_TYPE_FULL_SECONDARY,
+                USER_TYPE_FULL_GUEST,
+                USER_TYPE_FULL_RESTRICTED,
+                USER_TYPE_FULL_DEMO,
+        };
+        String[] profileUserTypes = new String[] {
+                USER_TYPE_PROFILE_MANAGED,
+                USER_TYPE_PROFILE_PRIVATE,
+                USER_TYPE_PROFILE_CLONE,
+        };
+        int paramsLength = fullUserTypes.length * profileUserTypes.length;
+        RestrictionsFallbackParams[] params = new RestrictionsFallbackParams[paramsLength];
+        int i = 0;
+        for (String fullUserType: fullUserTypes) {
+            for (String profileUserType: profileUserTypes) {
+                params[i] = new RestrictionsFallbackParams(fullUserType, profileUserType);
+                ++i;
+            }
+        }
+        return params;
     }
 }
