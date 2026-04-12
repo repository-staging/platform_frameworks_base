@@ -148,6 +148,7 @@ public final class UserTypeFactory {
                         .R.string.accessibility_label_clone_profile)
                 .setDefaultRestrictions(null)
                 .setDefaultCrossProfileIntentFilters(getDefaultCloneCrossProfileIntentFilter())
+                .setRestrictionsToFallbackFromParent(getDefaultCloneProfileRestrictionsToFallbackFromParent())
                 .setDefaultSecureSettings(getDefaultNonManagedProfileSecureSettings())
                 .setDefaultUserProperties(new UserProperties.Builder()
                         .setStartWithParent(true)
@@ -210,6 +211,7 @@ public final class UserTypeFactory {
                 .setDefaultRestrictions(getDefaultProfileRestrictions())
                 .setDefaultSecureSettings(getDefaultManagedProfileSecureSettings())
                 .setDefaultCrossProfileIntentFilters(getDefaultManagedCrossProfileIntentFilter())
+                .setRestrictionsToFallbackFromParent(getDefaultManagedProfileRestrictionsToFallbackFromParent())
                 .setDefaultUserProperties(new UserProperties.Builder()
                         .setStartWithParent(true)
                         .setShowInLauncher(UserProperties.SHOW_IN_LAUNCHER_SEPARATE)
@@ -257,6 +259,7 @@ public final class UserTypeFactory {
                         com.android.internal.R.color.profile_badge_2_dark,
                         com.android.internal.R.color.profile_badge_3_dark)
                 .setDefaultRestrictions(restrictions)
+                .setRestrictionsToFallbackFromParent(getDefaultProfileRestrictionsToFallbackFromParent())
                 .setDefaultSecureSettings(getDefaultNonManagedProfileSecureSettings());
     }
 
@@ -327,6 +330,7 @@ public final class UserTypeFactory {
                         .R.string.accessibility_label_private_profile)
                 .setDefaultRestrictions(getDefaultPrivateProfileRestrictions())
                 .setDefaultCrossProfileIntentFilters(getDefaultPrivateCrossProfileIntentFilter())
+                .setRestrictionsToFallbackFromParent(getDefaultPrivateProfileRestrictionsToFallbackFromParent())
                 .setDefaultUserProperties(new UserProperties.Builder()
                         .setStartWithParent(true)
                         .setCredentialShareableWithParent(true)
@@ -544,6 +548,29 @@ public final class UserTypeFactory {
     private static List<DefaultCrossProfileIntentFilter> getDefaultPrivateCrossProfileIntentFilter()
     {
         return DefaultCrossProfileIntentFiltersUtils.getDefaultPrivateProfileFilters();
+    }
+
+
+    private static List<String> getDefaultProfileRestrictionsToFallbackFromParent() {
+        final List<String> restrictionsToFallback = new ArrayList<>();
+        restrictionsToFallback.add(UserManager.DISALLOW_INSTALL_APPS);
+        restrictionsToFallback.add(UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES);
+        return restrictionsToFallback;
+    }
+
+    private static List<String> getDefaultManagedProfileRestrictionsToFallbackFromParent() {
+        final List<String> restrictionsToFallback = getDefaultProfileRestrictionsToFallbackFromParent();
+        return restrictionsToFallback;
+    }
+
+    private static List<String> getDefaultCloneProfileRestrictionsToFallbackFromParent() {
+        final List<String> restrictionsToFallback = getDefaultProfileRestrictionsToFallbackFromParent();
+        return restrictionsToFallback;
+    }
+
+    private static List<String> getDefaultPrivateProfileRestrictionsToFallbackFromParent() {
+        final List<String> restrictionsToFallback = getDefaultProfileRestrictionsToFallbackFromParent();
+        return restrictionsToFallback;
     }
 
     /** Gets a default bundle, keyed by Settings.Secure String names, for non-managed profiles. */
