@@ -3883,6 +3883,31 @@ public class UserManagerService extends IUserManager.Stub {
 
     @GuardedBy("mRestrictionsLock")
     private Bundle computeEffectiveUserRestrictionsLR(@UserIdInt int userId) {
+        Bundle fallbackEffective = new Bundle();
+        for (String fallbackKey: UserRestrictionsUtils.USER_RESTRICTIONS_FALLBACK_TO_PARENT) {
+            final int parentUserId = getProfileParentIdUnchecked(userId);
+            if (parentUserId == userId) {
+                break;
+            }
+
+            Bundle parentEffective = getEffectiveUserRestrictions(parentUserId);
+            if (!parentEffective.getBoolean(fallbackKey, false)) {
+                continue;
+            }
+
+            fallbackEffective.putBoolean(fallbackKey, true);
+        }
+
+        if (fallbackEffective.isEmpty()) {
+            return computeEffectiveUserRestrictionsForUserLR(userId);
+        }
+
+        UserRestrictionsUtils.merge(fallbackEffective, computeEffectiveUserRestrictionsForUserLR(userId));
+        return fallbackEffective;
+    }
+
+    @GuardedBy("mRestrictionsLock")
+    private Bundle computeEffectiveUserRestrictionsForUserLR(@UserIdInt int userId) {
         final Bundle baseRestrictions = mBaseUserRestrictions.getRestrictionsNonNull(userId);
 
         final Bundle global = mDevicePolicyUserRestrictions.getRestrictionsNonNull(
@@ -4040,6 +4065,30 @@ public class UserManagerService extends IUserManager.Stub {
         if (!UserRestrictionsUtils.isValidRestriction(restrictionKey)) {
             return false;
         }
+
+        boolean res = hasBaseUserRestrictionNoChecks(restrictionKey, userId);
+        if (res) {
+            return true;
+        }
+
+        if (!UserRestrictionsUtils.USER_RESTRICTIONS_FALLBACK_TO_PARENT.contains(restrictionKey)) {
+            return false;
+        }
+
+        final int parentUserId = getProfileParentIdUnchecked(userId);
+        if (parentUserId == userId) {
+            return false;
+        }
+
+        boolean parentRes = hasBaseUserRestrictionNoChecks(restrictionKey, parentUserId);
+        if (!parentRes) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private boolean hasBaseUserRestrictionNoChecks(String restrictionKey, @UserIdInt int userId) {
         synchronized (mRestrictionsLock) {
             Bundle bundle = mBaseUserRestrictions.getRestrictions(userId);
             return (bundle != null && bundle.getBoolean(restrictionKey, false));
@@ -4120,6 +4169,64 @@ public class UserManagerService extends IUserManager.Stub {
         propagateUserRestrictionsLR(userId, effective, prevAppliedRestrictions);
 
         mAppliedUserRestrictions.updateRestrictions(userId, new Bundle(effective));
+
+        maybeUpdateUserRestrictionsForItsProfileInternalLR(userId, effective, prevAppliedRestrictions);
+    }
+
+
+    @GuardedBy("mRestrictionsLock")
+    private void maybeUpdateUserRestrictionsForItsProfileInternalLR(
+            @UserIdInt int userId, Bundle newRestrictions, Bundle prevRestrictions) {
+        UserInfo userInfo = getUserInfoNoChecks(userId);
+        if (userInfo == null || !userInfo.isFull()) {
+            return;
+        }
+
+        List<UserInfo> profileInfos;
+        final long identity = Binder.clearCallingIdentity();
+        try {
+            synchronized (mUsersLock) {
+                boolean enabledOnly = true;
+                boolean returnFullInfo = false;
+                profileInfos = getProfilesLU(userId, /* userType */ null, enabledOnly, returnFullInfo);
+            }
+        } finally {
+            Binder.restoreCallingIdentity(identity);
+        }
+
+        if (profileInfos.size() == 1) {
+            return;
+        }
+
+        Set<String> diffKeys = new ArraySet<>();
+        for (String key : newRestrictions.keySet()) {
+            boolean oldVal = prevRestrictions.getBoolean(key);
+            boolean newVal = newRestrictions.getBoolean(key);
+            if (newVal != oldVal) {
+                diffKeys.add(key);
+            }
+        }
+
+        boolean shouldUpdateOtherUsers = false;
+        for (UserInfo profileInfo: profileInfos) {
+            int profileUserId = profileInfo.id;
+            if (profileUserId == userId) {
+                continue;
+            }
+
+            for (String fallbackKeys: UserRestrictionsUtils.USER_RESTRICTIONS_FALLBACK_TO_PARENT) {
+                if (diffKeys.contains(fallbackKeys)) {
+                    shouldUpdateOtherUsers = true;
+                    break;
+                }
+            }
+
+            if (!shouldUpdateOtherUsers) {
+                continue;
+            }
+
+            updateUserRestrictionsInternalLR(null, profileUserId);
+        }
     }
 
     @GuardedBy("mRestrictionsLock")
